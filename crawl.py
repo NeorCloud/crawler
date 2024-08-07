@@ -106,4 +106,4 @@ if __name__ == "__main__":
     start_url = args.url
     logging.info(f"Start crawling at {start_url}")
     crawl(start_url)
-    logging.info("Crawling complete with {len(visited_urls)} visited URLs")
+    logging.info(f"Crawling complete with {len(visited_urls)} visited URLs")
