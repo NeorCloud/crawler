@@ -30,7 +30,11 @@ def fetch_page(url):
         return None
 
 def extract_links_from_html(html, base_url):
-    soup = BeautifulSoup(html, 'html.parser')
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+    except Exception as e:
+        logging.error(f"Failed to parse {base_url}: {e}")
+        return set()
     links = set()
     
     # Extract links from <a> tags
