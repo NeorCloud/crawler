@@ -12,11 +12,16 @@ logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Crawl a website")
 parser.add_argument("url", help="The URL of the website to crawl")
+parser.add_argument("--domains", nargs="+", help="List of allowed domains")
 
 visited_urls = set()
 
+allowed_domains = set()
+
 def fetch_page(url):
     try:
+        # Change schema to http
+        url = re.sub(r'^https', 'http', url)
         response = requests.get(url)
         response.raise_for_status()
         return response.text
@@ -32,42 +37,42 @@ def extract_links_from_html(html, base_url):
     for a_tag in soup.find_all('a', href=True):
         href = a_tag['href']
         full_url = urljoin(base_url, href)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
     
     # Extract links from <link> tags (CSS files)
     for link_tag in soup.find_all('link', href=True):
         href = link_tag['href']
         full_url = urljoin(base_url, href)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
     
     # Extract links from <script> tags (JS files)
     for script_tag in soup.find_all('script', src=True):
         src = script_tag['src']
         full_url = urljoin(base_url, src)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
     
     # Extract links from <img> tags (images)
     for img_tag in soup.find_all('img', src=True):
         src = img_tag['src']
         full_url = urljoin(base_url, src)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
     
     # Extract links from <video> tags (video files)
     for video_tag in soup.find_all('video', src=True):
         src = video_tag['src']
         full_url = urljoin(base_url, src)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
     
     # Extract links from <audio> tags (audio files)
     for audio_tag in soup.find_all('audio', src=True):
         src = audio_tag['src']
         full_url = urljoin(base_url, src)
-        if urlparse(full_url).netloc == urlparse(base_url).netloc:
+        if urlparse(full_url).netloc in allowed_domains:
             links.add(full_url)
 
     logging.info(f"Found {len(links)} links on {base_url}")
@@ -104,6 +109,8 @@ def crawl(start_url):
 if __name__ == "__main__":
     args = parser.parse_args()
     start_url = args.url
+    if args.domains:
+        allowed_domains.update(args.domains)
     logging.info(f"Start crawling at {start_url}")
     crawl(start_url)
     logging.info(f"Crawling complete with {len(visited_urls)} visited URLs")
