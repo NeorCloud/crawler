@@ -112,5 +112,6 @@ if __name__ == "__main__":
     if args.domains:
         allowed_domains.update(args.domains)
     logging.info(f"Start crawling at {start_url}")
+    logging.info(f"Allowed domains: {allowed_domains}")
     crawl(start_url)
     logging.info(f"Crawling complete with {len(visited_urls)} visited URLs")
