@@ -102,7 +102,7 @@ def crawl(start_url):
         text = fetch_page(url)
         if text:
             visited_urls.add(url)
-            time.sleep(0.5)
+            time.sleep(0.05)
             if url.endswith('.js') or url.endswith('.css'):
                 links = extract_links_from_text(text, url)
             else:
