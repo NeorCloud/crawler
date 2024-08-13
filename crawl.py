@@ -96,6 +96,7 @@ def extract_links_from_text(text, base_url):
 def crawl(start_url):
     queue = [start_url]
     while queue:
+        logging.info(f"{start_url} - Queue: {len(queue)}, Visited: {len(visited_urls)}")
         url = queue.pop()
         if url in visited_urls:
             continue
