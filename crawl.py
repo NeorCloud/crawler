@@ -22,6 +22,7 @@ def fetch_page(url):
     try:
         # Change schema to http
         url = re.sub(r'^https', 'http', url)
+        logging.info(f"Fetching {url}")
         response = requests.get(url)
         response.raise_for_status()
         return response.text
