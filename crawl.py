@@ -95,7 +95,7 @@ def extract_links_from_text(text, base_url):
     return links
 
 def crawl(start_url):
-    queue = [start_url]
+    queue = {start_url}
     while queue:
         logging.info(f"{start_url} - Queue: {len(queue)}, Visited: {len(visited_urls)}")
         url = queue.pop()
@@ -109,7 +109,7 @@ def crawl(start_url):
                 links = extract_links_from_text(text, url)
             else:
                 links = extract_links_from_html(text, url)
-            queue += links
+            queue.update(links)
 
 
 if __name__ == "__main__":
