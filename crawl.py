@@ -7,7 +7,7 @@ import argparse
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(process)d:%(levelname)s:%(module)s:%(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Crawl a website")
