@@ -1,3 +1,5 @@
+import hashlib
+import os
 import re
 import aiohttp
 import asyncio
@@ -19,6 +21,28 @@ parser.add_argument("--clean-cache", action="store_true", help="Clean the cache 
 visited_urls = set()
 allowed_domains = set()
 semaphore = asyncio.Semaphore(20)
+
+# Nginx cache settings
+cache_dir = "/root/nginx/cache"
+temp_cache_dir = "/tmp/cache"
+cache_path_levels = "1:2"
+
+def generate_cache_key(url):
+    # Generate a cache key using this pattern: $scheme$request_method$host$request_uri
+    parsed_url = urlparse(url)
+    cache_key = f"{parsed_url.scheme}GET{parsed_url.hostname}{parsed_url.path}"
+    return cache_key
+
+def get_cache_file_path(cache_key):
+    # Generate a cache path using nginx's cache directory and the md5 hash of the cache key
+    cache_key_md5 = hashlib.md5(cache_key.encode()).hexdigest()
+
+    if cache_path_levels == "1:2":
+        return os.path.join(cache_dir, cache_key_md5[-1], cache_key_md5[-3:-1], cache_key_md5)
+    elif cache_path_levels == "1:2:3":
+        return os.path.join(cache_dir, cache_key_md5[-1], cache_key_md5[-3:-1], cache_key_md5[-6:-3], cache_key_md5)
+    else:
+        return os.path.join(cache_dir, cache_key_md5)
 
 async def fetch_page(session, url):
     try:
@@ -53,6 +77,38 @@ async def purge_page(session, url):
             return None
         logging.error(f"Failed to purge {url}: {e}")
         return None
+
+async def renew_page_cache(session, url):
+    # Get the cache key from the URL
+    cache_key = generate_cache_key(url)
+
+    logging.info(f"Checking availibility of {url}")
+    cache_file_path = get_cache_file_path(cache_key)
+    logging.debug(f"Cache file path: {cache_file_path}")
+    try:
+        if os.path.exists(cache_file_path):
+            logging.debug(f"Cache file found for {cache_file_path}")
+            # Move the cache file to the temp directory
+            temp_cache_file_path = os.path.join(temp_cache_dir, cache_file_path)
+            os.makedirs(os.path.dirname(temp_cache_file_path), exist_ok=True)
+            os.rename(cache_file_path, temp_cache_file_path)
+            # Try to fetch the URL
+            content_type, response = await fetch_page(session, url)
+            if not response:
+                logging.error(f"Failed to fetch {url}")
+                # Move the cache file back to the cache directory
+                os.rename(temp_cache_file_path, cache_file_path)
+                logging.warning(f"Cache file restored for {cache_key}")
+                return False
+            # Remove the cache file from the temp directory
+            os.remove(temp_cache_file_path)
+            logging.info(f"Succesfully renewed cache for {url}")
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Failed to renew cache for {url}: {e}")
+        return False
+
 
 def extract_links_from_html(html, base_url):
     try:
@@ -127,8 +183,7 @@ async def crawl(session, start_url):
             logging.info(f"Already visited {url}")
             continue
         if args.purge:
-            purge_response = await purge_page(session, url)
-            logger.debug(f"Purge response: {purge_response}")
+            renew_cache = await renew_page_cache(session, url)
         content_type, response = await fetch_page(session, url)
         if args.clean_cache:
             purge_response = await purge_page(session, url)
