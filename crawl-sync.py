@@ -1,8 +1,8 @@
 import re
-import aiohttp
-import asyncio
+import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+import time
 import argparse
 import logging
 
@@ -13,45 +13,21 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description="Crawl a website")
 parser.add_argument("url", help="The URL of the website to crawl")
 parser.add_argument("--domains", nargs="+", help="List of allowed domains")
-parser.add_argument("--purge", action="store_true", help="Purge each URL cache before visiting", default=False)
-parser.add_argument("--clean-cache", action="store_true", help="Clean the cache after crawling", default=False)
 
 visited_urls = set()
-allowed_domains = set()
-semaphore = asyncio.Semaphore(20)
 
-async def fetch_page(session, url):
+allowed_domains = set()
+
+def fetch_page(url):
     try:
         # Change schema to http
         url = re.sub(r'^https', 'http', url)
         logging.info(f"Fetching {url}")
-        async with semaphore:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                _ = await response.read()
-                return (response.headers.get('Content-Type'), response)
-    except aiohttp.ClientError as e:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text
+    except requests.RequestException as e:
         logging.error(f"Failed to fetch {url}: {e}")
-        return (None, None)
-    except asyncio.TimeoutError as e:
-        logging.error(f"Timeout error for {url}: {e}")
-        return (None, None)
-    
-async def purge_page(session, url):
-    try:
-        # Change schema to http
-        url = re.sub(r'^https', 'http', url)
-        logging.info(f"Purging {url}")
-        async with semaphore:
-            async with session.request('PURGE', url) as response:
-                response.raise_for_status()
-                return await response.text()
-    except aiohttp.ClientError as e:
-        # Check if the URL is already purged and response code is 404
-        if e.status == 404:
-            logging.info(f"URL {url} is already purged")
-            return None
-        logging.error(f"Failed to purge {url}: {e}")
         return None
 
 def extract_links_from_html(html, base_url):
@@ -118,37 +94,23 @@ def extract_links_from_text(text, base_url):
     logging.info(f"Found {len(links)} links on {base_url}")
     return links
 
-async def crawl(session, start_url):
+def crawl(start_url):
     queue = {start_url}
     while queue:
         logging.info(f"{start_url} - Queue: {len(queue)}, Visited: {len(visited_urls)}")
         url = queue.pop()
         if url in visited_urls:
-            logging.info(f"Already visited {url}")
             continue
-        if args.purge:
-            purge_response = await purge_page(session, url)
-            logger.debug(f"Purge response: {purge_response}")
-        content_type, response = await fetch_page(session, url)
-        if args.clean_cache:
-            purge_response = await purge_page(session, url)
-            logger.debug(f"Purge response: {purge_response}")
-        if response and response.ok:
-            logging.info(f"Successfully fetched {url}: {response.status}, {content_type}")
+        text = fetch_page(url)
+        if text:
             visited_urls.add(url)
-        else:
-            continue
-        if content_type in ['text/html', 'text/css', 'application/javascript'] or content_type.startswith('text/'):
-            text = await response.text()
+            # time.sleep(0.05)
             if url.endswith('.js') or url.endswith('.css'):
                 links = extract_links_from_text(text, url)
             else:
                 links = extract_links_from_html(text, url)
             queue.update(links)
 
-async def main(start_url):
-    async with aiohttp.ClientSession() as session:
-        await crawl(session, start_url)
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -157,5 +119,5 @@ if __name__ == "__main__":
         allowed_domains.update(args.domains)
     logging.info(f"Start crawling at {start_url}")
     logging.info(f"Allowed domains: {allowed_domains}")
-    asyncio.run(main(start_url))
+    crawl(start_url)
     logging.info(f"Crawling complete with {len(visited_urls)} visited URLs")
